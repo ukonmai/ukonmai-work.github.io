@@ -561,10 +561,22 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
       if(ev.start.dateTime) {
         var start = new Date(ev.start.dateTime);
         var end = new Date(ev.end.dateTime);
-        time.textContent = formatDate(start) + ' ' + formatTime(start) + '〜' + formatTime(end);
+        // 開始日と終了日が異なる場合は期間表示
+        if(formatDate(start) !== formatDate(end)) {
+          time.textContent = formatDate(start) + ' ' + formatTime(start) + '〜' + formatDate(end) + ' ' + formatTime(end);
+        } else {
+          time.textContent = formatDate(start) + ' ' + formatTime(start) + '〜' + formatTime(end);
+        }
       } else {
-        var d = new Date(ev.start.date);
-        time.textContent = formatDate(d);
+        var startD = new Date(ev.start.date);
+        var endD = new Date(ev.end.date);
+        // 終日イベントの終了日はAPIが翌日を返すので1日引く
+        endD.setDate(endD.getDate() - 1);
+        if(startD.getTime() !== endD.getTime()) {
+          time.textContent = formatDate(startD) + '〜' + formatDate(endD);
+        } else {
+          time.textContent = formatDate(startD);
+        }
       }
       item.appendChild(time);
 
