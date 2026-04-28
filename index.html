@@ -611,32 +611,67 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
   function openEditModal(ev) {
     editingEventId = ev.id;
     document.getElementById('edit-title').value = ev.summary || '';
+    document.getElementById('edit-location').value = ev.location || '';
+    document.getElementById('edit-desc').value = ev.description || '';
+
     if(ev.start.dateTime) {
       var start = new Date(ev.start.dateTime);
       var end = new Date(ev.end.dateTime);
-      document.getElementById('edit-date').value = start.toISOString().substring(0,10);
-      document.getElementById('edit-start').value = formatTime(start);
-      document.getElementById('edit-end').value = formatTime(end);
+      document.getElementById('edit-start-date').value = start.toISOString().substring(0,10);
+      document.getElementById('edit-end-date').value = '';
+      document.getElementById('edit-start-time').value = formatTime(start);
+      document.getElementById('edit-end-time').value = formatTime(end);
+    } else {
+      var startD = new Date(ev.start.date);
+      var endD = new Date(ev.end.date);
+      endD.setDate(endD.getDate() - 1);
+      document.getElementById('edit-start-date').value = ev.start.date;
+      document.getElementById('edit-end-date').value = startD.getTime() !== endD.getTime() ? endD.toISOString().substring(0,10) : '';
+      document.getElementById('edit-start-time').value = '';
+      document.getElementById('edit-end-time').value = '';
     }
-    document.getElementById('edit-desc').value = ev.description || '';
     document.getElementById('edit-modal').style.display = 'flex';
   }
 
   // 編集保存
   function saveEdit() {
     var title = document.getElementById('edit-title').value;
-    var date = document.getElementById('edit-date').value;
-    var start = document.getElementById('edit-start').value;
-    var end = document.getElementById('edit-end').value;
+    var startDate = document.getElementById('edit-start-date').value;
+    var endDate = document.getElementById('edit-end-date').value;
+    var startTime = document.getElementById('edit-start-time').value;
+    var endTime = document.getElementById('edit-end-time').value;
+    var location = document.getElementById('edit-location').value;
     var desc = document.getElementById('edit-desc').value;
-    if(!title || !date || !start || !end) { alert('タイトル・日付・時間は必須です'); return; }
-    var body = {
-      summary: title,
-      description: desc,
-      start: { dateTime: date + 'T' + start + ':00', timeZone: 'Asia/Tokyo' },
-      end: { dateTime: date + 'T' + end + ':00', timeZone: 'Asia/Tokyo' },
-      visibility: 'public'
-    };
+
+    if(!title || !startDate) { alert('タイトルと開始日は必須です'); return; }
+
+    var body;
+    if(startTime && endTime) {
+      // 時間指定イベント
+      var endDateForTime = endDate || startDate;
+      body = {
+        summary: title,
+        location: location,
+        description: desc,
+        start: { dateTime: startDate + 'T' + startTime + ':00', timeZone: 'Asia/Tokyo' },
+        end: { dateTime: endDateForTime + 'T' + endTime + ':00', timeZone: 'Asia/Tokyo' },
+        visibility: 'public'
+      };
+    } else {
+      // 終日イベント
+      var endDateAllDay = endDate ? new Date(endDate) : new Date(startDate);
+      endDateAllDay.setDate(endDateAllDay.getDate() + 1);
+      var endDateStr = endDateAllDay.toISOString().substring(0,10);
+      body = {
+        summary: title,
+        location: location,
+        description: desc,
+        start: { date: startDate },
+        end: { date: endDateStr },
+        visibility: 'public'
+      };
+    }
+
     fetch('https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(CAL_ID) + '/events/' + editingEventId, {
       method: 'PUT',
       headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
@@ -706,26 +741,36 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
 </script>
 
 <!-- 編集モーダル -->
-<div id="edit-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:8px;padding:2rem;width:90%;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+<div id="edit-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;overflow-y:auto">
+  <div style="background:#fff;border-radius:8px;padding:2rem;width:90%;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,0.2);margin:2rem auto">
     <h3 style="color:#5c3520;margin-bottom:1.2rem;font-size:1.1rem">イベントを編集</h3>
     <div style="margin-bottom:0.8rem">
-      <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">タイトル</label>
+      <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">タイトル <span style="color:#c0392b">*</span></label>
       <input id="edit-title" type="text" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
     </div>
-    <div style="margin-bottom:0.8rem">
-      <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">日付</label>
-      <input id="edit-date" type="date" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-bottom:0.8rem">
+      <div>
+        <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">開始日 <span style="color:#c0392b">*</span></label>
+        <input id="edit-start-date" type="date" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
+      </div>
+      <div>
+        <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">終了日（複数日の場合）</label>
+        <input id="edit-end-date" type="date" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-bottom:0.8rem">
       <div>
         <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">開始時間</label>
-        <input id="edit-start" type="time" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
+        <input id="edit-start-time" type="time" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
       </div>
       <div>
         <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">終了時間</label>
-        <input id="edit-end" type="time" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
+        <input id="edit-end-time" type="time" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
       </div>
+    </div>
+    <div style="margin-bottom:0.8rem">
+      <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">場所</label>
+      <input id="edit-location" type="text" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
     </div>
     <div style="margin-bottom:1.2rem">
       <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">詳細・備考</label>
