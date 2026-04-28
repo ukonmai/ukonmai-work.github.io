@@ -345,6 +345,13 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
 <section class="sec" style="background-color:#faf6f0"><div class="inner">
   <div class="reveal" style="text-align:center;margin-bottom:1.5rem">
     <p style="font-size:clamp(0.82rem,1.8vw,0.97rem);color:#5c3520;line-height:2">最新のイベント情報をご確認ください。<br>ご不明な点はお気軽にお問い合わせください。</p>
+    <div style="margin-top:1rem">
+      <button id="admin-login-btn" onclick="handleCalLogin()" style="background:none;border:1px solid #d4b89a;color:#9e7a6a;border-radius:4px;padding:6px 16px;font-size:0.78rem;cursor:pointer">🔑 管理者ログイン</button>
+      <button id="admin-logout-btn" onclick="handleCalLogout()" style="display:none;background:none;border:1px solid #d4b89a;color:#9e7a6a;border-radius:4px;padding:6px 16px;font-size:0.78rem;cursor:pointer">ログアウト</button>
+    </div>
+  </div>
+  <div id="admin-panel" style="display:none;background:#fff8f5;border:1px solid #d4b89a;border-radius:6px;padding:1rem;margin-bottom:1.5rem;text-align:center">
+    <p style="color:#5c3520;font-size:0.85rem;margin-bottom:0">✅ 管理者としてログイン中です。各イベントの編集・削除ボタンが表示されています。</p>
   </div>
   <div class="reveal" id="calendar-container" style="max-width:1000px;margin:0 auto">
     <!-- カレンダーナビ -->
@@ -372,30 +379,75 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
 </div>
 
 <style>
-.cal-day{min-height:90px;background:#fff;border-radius:6px;padding:5px;position:relative;cursor:pointer;transition:background 0.2s}
+.cal-day{min-height:110px;background:#fff;border-radius:6px;padding:6px;position:relative;cursor:pointer;transition:background 0.2s}
 .cal-day:hover{background:#f5ece6}
 .cal-day.other-month{background:#f5f0eb;opacity:0.5}
-.cal-day.today .cal-date{background:#9e4028;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center}
-.cal-date{font-size:0.9rem;font-weight:600;color:#5c3520;margin-bottom:3px;width:26px;height:26px;display:flex;align-items:center;justify-content:center}
+.cal-day.today .cal-date{background:#9e4028;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center}
+.cal-date{font-size:0.9rem;font-weight:600;color:#5c3520;margin-bottom:4px;width:28px;height:28px;display:flex;align-items:center;justify-content:center}
 .cal-day.sunday .cal-date{color:#c0392b}
 .cal-day.saturday .cal-date{color:#2471a3}
-.cal-event-dot{background:#9e4028;color:#fff;font-size:0.68rem;border-radius:3px;padding:2px 4px;margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:1.4;display:block}
+.cal-event-dot{background:#9e4028;color:#fff;font-size:0.72rem;border-radius:3px;padding:3px 5px;margin-top:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:1.5;display:block;font-weight:500}
 .event-item{background:#fff;border-left:4px solid #9e4028;border-radius:6px;padding:0.8rem 1rem;margin-bottom:0.8rem;box-shadow:0 2px 8px rgba(44,26,14,0.08)}
 .event-item .event-title{font-weight:700;color:#5c3520;font-size:1rem}
 .event-item .event-time{color:#9e4028;font-size:0.85rem;margin-top:0.2rem}
 .event-item .event-desc{color:#7a5c4a;font-size:0.85rem;margin-top:0.3rem}
-@media(max-width:600px){.cal-day{min-height:60px;padding:3px}.cal-event-dot{font-size:0.58rem;padding:1px 3px}}
+@media(max-width:600px){.cal-day{min-height:70px;padding:3px}.cal-event-dot{font-size:0.6rem;padding:2px 3px}}
 </style>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 (function(){
   var API_KEY = 'AIzaSyD0DrCv6QZlG3d9YKC6NKm3dzIlnYXyumg';
+  var CLIENT_ID = '316806064400-c7kicf5a7khtf7ctmoo6iiahg4c84r2f.apps.googleusercontent.com';
   var CAL_ID = 'cd835c462f14f55e67cf32087da1cf1d748cd83166491022b53fb0d985e545fb@group.calendar.google.com';
+  var SCOPES = 'https://www.googleapis.com/auth/calendar';
   var currentDate = new Date();
   var currentYear = currentDate.getFullYear();
   var currentMonth = currentDate.getMonth();
   var allEvents = [];
+  var accessToken = null;
+  var tokenClient = null;
+  var editingEventId = null;
 
+  // Google Identity Services初期化
+  function initGIS() {
+    if(typeof google === 'undefined') return;
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: function(resp) {
+        if(resp.error) { alert('ログインに失敗しました'); return; }
+        accessToken = resp.access_token;
+        showAdminPanel();
+      }
+    });
+  }
+
+  // ログインボタン処理
+  function handleLogin() {
+    if(!tokenClient) { initGIS(); }
+    if(tokenClient) tokenClient.requestAccessToken();
+  }
+
+  // ログアウト
+  function handleLogout() {
+    if(accessToken) google.accounts.oauth2.revoke(accessToken);
+    accessToken = null;
+    document.getElementById('admin-panel').style.display = 'none';
+    document.getElementById('admin-login-btn').style.display = 'inline-block';
+    document.getElementById('admin-logout-btn').style.display = 'none';
+    renderEventList();
+  }
+
+  // 管理パネル表示
+  function showAdminPanel() {
+    document.getElementById('admin-panel').style.display = 'block';
+    document.getElementById('admin-login-btn').style.display = 'none';
+    document.getElementById('admin-logout-btn').style.display = 'inline-block';
+    renderEventList();
+  }
+
+  // イベント取得
   function fetchEvents(year, month) {
     var timeMin = new Date(year, month, 1).toISOString();
     var timeMax = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
@@ -414,44 +466,36 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
           return;
         }
         allEvents = data.items || [];
-        document.getElementById('cal-events').innerHTML = '<p style="color:green;text-align:center">取得件数: ' + allEvents.length + '件</p>';
-        setTimeout(function(){ renderCalendar(year, month); }, 100);
+        renderCalendar(year, month);
       })
-      .catch(function(err){
+      .catch(function(){
         document.getElementById('cal-events').innerHTML = '<p style="color:red;text-align:center">接続エラーが発生しました</p>';
         renderCalendar(year, month);
       });
   }
 
+  // カレンダー描画
   function renderCalendar(year, month) {
     var months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
     document.getElementById('cal-title').textContent = year + '年 ' + months[month];
-
     var grid = document.getElementById('cal-grid');
     grid.innerHTML = '';
-
     var firstDay = new Date(year, month, 1).getDay();
     var daysInMonth = new Date(year, month + 1, 0).getDate();
     var daysInPrev = new Date(year, month, 0).getDate();
     var today = new Date();
-
-    // 前月の日
     for(var i = firstDay - 1; i >= 0; i--) {
-      var d = daysInPrev - i;
-      grid.appendChild(createDayCell(year, month - 1, d, true));
+      grid.appendChild(createDayCell(year, month - 1, daysInPrev - i, true));
     }
-    // 当月の日
     for(var d = 1; d <= daysInMonth; d++) {
       var isToday = (year === today.getFullYear() && month === today.getMonth() && d === today.getDate());
       grid.appendChild(createDayCell(year, month, d, false, isToday));
     }
-    // 次月の日
     var total = firstDay + daysInMonth;
     var remaining = total % 7 === 0 ? 0 : 7 - (total % 7);
     for(var d = 1; d <= remaining; d++) {
       grid.appendChild(createDayCell(year, month + 1, d, true));
     }
-
     renderEventList();
   }
 
@@ -461,13 +505,10 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
     var dow = new Date(year, month, day).getDay();
     if(dow === 0) cell.classList.add('sunday');
     if(dow === 6) cell.classList.add('saturday');
-
     var dateDiv = document.createElement('div');
     dateDiv.className = 'cal-date';
     dateDiv.textContent = day;
     cell.appendChild(dateDiv);
-
-    // その日のイベントを表示
     if(!otherMonth) {
       var dayStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
       allEvents.forEach(function(ev) {
@@ -483,6 +524,7 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
     return cell;
   }
 
+  // イベント一覧描画
   function renderEventList() {
     var container = document.getElementById('cal-events');
     container.innerHTML = '';
@@ -522,7 +564,78 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
         desc.textContent = ev.description;
         item.appendChild(desc);
       }
+
+      // 管理者ログイン中は編集・削除ボタンを表示
+      if(accessToken) {
+        var btnWrap = document.createElement('div');
+        btnWrap.style.cssText = 'margin-top:0.6rem;display:flex;gap:0.5rem';
+        var editBtn = document.createElement('button');
+        editBtn.textContent = '✏️ 編集';
+        editBtn.style.cssText = 'background:#5c3520;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:0.8rem';
+        editBtn.onclick = function(){ openEditModal(ev); };
+        var delBtn = document.createElement('button');
+        delBtn.textContent = '🗑️ 削除';
+        delBtn.style.cssText = 'background:#c0392b;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:0.8rem';
+        delBtn.onclick = function(){ deleteEvent(ev.id, ev.summary); };
+        btnWrap.appendChild(editBtn);
+        btnWrap.appendChild(delBtn);
+        item.appendChild(btnWrap);
+      }
       container.appendChild(item);
+    });
+  }
+
+  // 編集モーダルを開く
+  function openEditModal(ev) {
+    editingEventId = ev.id;
+    document.getElementById('edit-title').value = ev.summary || '';
+    if(ev.start.dateTime) {
+      var start = new Date(ev.start.dateTime);
+      var end = new Date(ev.end.dateTime);
+      document.getElementById('edit-date').value = start.toISOString().substring(0,10);
+      document.getElementById('edit-start').value = formatTime(start);
+      document.getElementById('edit-end').value = formatTime(end);
+    }
+    document.getElementById('edit-desc').value = ev.description || '';
+    document.getElementById('edit-modal').style.display = 'flex';
+  }
+
+  // 編集保存
+  function saveEdit() {
+    var title = document.getElementById('edit-title').value;
+    var date = document.getElementById('edit-date').value;
+    var start = document.getElementById('edit-start').value;
+    var end = document.getElementById('edit-end').value;
+    var desc = document.getElementById('edit-desc').value;
+    if(!title || !date || !start || !end) { alert('タイトル・日付・時間は必須です'); return; }
+    var body = {
+      summary: title,
+      description: desc,
+      start: { dateTime: date + 'T' + start + ':00', timeZone: 'Asia/Tokyo' },
+      end: { dateTime: date + 'T' + end + ':00', timeZone: 'Asia/Tokyo' },
+      visibility: 'public'
+    };
+    fetch('https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(CAL_ID) + '/events/' + editingEventId, {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.error) { alert('エラー: ' + data.error.message); return; }
+      document.getElementById('edit-modal').style.display = 'none';
+      fetchEvents(currentYear, currentMonth);
+    });
+  }
+
+  // 削除
+  function deleteEvent(id, name) {
+    if(!confirm('「' + name + '」を削除しますか？')) return;
+    fetch('https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(CAL_ID) + '/events/' + id, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + accessToken }
+    }).then(function(r){
+      if(r.status === 204) { fetchEvents(currentYear, currentMonth); }
+      else { alert('削除に失敗しました'); }
     });
   }
 
@@ -544,10 +657,8 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
     fetchEvents(currentYear, currentMonth);
   });
 
-  // イベントページが表示されたときに読み込む
   document.addEventListener('click', function(e){
     var target = e.target;
-    // 親要素もチェック（intro-cardなど子要素がある場合）
     while(target && target !== document) {
       if(target.dataset && target.dataset.page === 'schedule') {
         setTimeout(function(){ fetchEvents(currentYear, currentMonth); }, 300);
@@ -557,12 +668,53 @@ footer{background-color:#2c1a0e;color:rgba(245,237,227,0.7)}
     }
   });
 
-  // ページ読み込み時にイベントページが表示されている場合も対応
   if(document.getElementById('page-schedule').style.display !== 'none') {
     fetchEvents(currentYear, currentMonth);
   }
+
+  // グローバルに公開
+  window.handleCalLogin = handleLogin;
+  window.handleCalLogout = handleLogout;
+  window.saveEdit = saveEdit;
+  window.closeEditModal = function(){ document.getElementById('edit-modal').style.display = 'none'; };
+
+  // GIS読み込み後に初期化
+  window.addEventListener('load', function(){ setTimeout(initGIS, 1000); });
 })();
 </script>
+
+<!-- 編集モーダル -->
+<div id="edit-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:8px;padding:2rem;width:90%;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+    <h3 style="color:#5c3520;margin-bottom:1.2rem;font-size:1.1rem">イベントを編集</h3>
+    <div style="margin-bottom:0.8rem">
+      <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">タイトル</label>
+      <input id="edit-title" type="text" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
+    </div>
+    <div style="margin-bottom:0.8rem">
+      <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">日付</label>
+      <input id="edit-date" type="date" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-bottom:0.8rem">
+      <div>
+        <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">開始時間</label>
+        <input id="edit-start" type="time" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
+      </div>
+      <div>
+        <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">終了時間</label>
+        <input id="edit-end" type="time" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem">
+      </div>
+    </div>
+    <div style="margin-bottom:1.2rem">
+      <label style="font-size:0.85rem;color:#5c3520;display:block;margin-bottom:0.3rem">詳細・備考</label>
+      <textarea id="edit-desc" rows="3" style="width:100%;padding:8px;border:1px solid #d4b89a;border-radius:4px;font-size:0.9rem;resize:vertical"></textarea>
+    </div>
+    <div style="display:flex;gap:0.8rem;justify-content:flex-end">
+      <button onclick="closeEditModal()" style="background:#f5ede3;color:#5c3520;border:1px solid #d4b89a;border-radius:4px;padding:8px 20px;cursor:pointer">キャンセル</button>
+      <button onclick="saveEdit()" style="background:#9e4028;color:#fff;border:none;border-radius:4px;padding:8px 20px;cursor:pointer">保存</button>
+    </div>
+  </div>
+</div>
 
 <!-- ENGLISH VERSION -->
 <div id="page-en-home" class="page">
